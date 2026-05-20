@@ -1,6 +1,6 @@
 {
   "name": "@sinco-lab/mcp-youtube-transcript",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "A server built on the Model Context Protocol (MCP) that enables direct downloading of YouTube video transcripts, supporting AI and video analysis workflows.",
   "license": "MIT",
   "author": "sinco",
@@ -14,15 +14,19 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "youtube",
+    "youtube-transcript",
     "transcript",
     "subtitles",
     "captions",
     "video",
     "ai",
     "claude",
+    "claude-desktop",
     "cursor",
     "cline",
+    "typescript",
     "modelcontextprotocol"
   ],
   "type": "module",

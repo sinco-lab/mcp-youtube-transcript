@@ -7,6 +7,7 @@ dist
 
 # Version control
 .git
+.github
 .gitignore
 
 # IDE files
@@ -33,4 +34,4 @@ coverage
 
 # OS files
 .DS_Store
-Thumbs.db 
+Thumbs.db

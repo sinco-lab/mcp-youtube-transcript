@@ -77,3 +77,22 @@ Hello <b>world</b>
     duration: 2.5
   }]);
 });
+
+test("formatTimedTranscriptText formats timestamped lines", () => {
+  const text = YouTubeUtils.formatTimedTranscriptText([
+    {
+      text: "Hello &amp; welcome",
+      lang: "en",
+      timestamp: 1.25,
+      duration: 2
+    },
+    {
+      text: "next line",
+      lang: "en",
+      timestamp: 65,
+      duration: 1
+    }
+  ]);
+
+  assert.equal(text, "[00:00:01.250] Hello & welcome\n[00:01:05.000] next line");
+});

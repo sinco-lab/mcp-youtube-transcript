@@ -1,6 +1,11 @@
 # MCP YouTube Transcript Server
 
-A Model Context Protocol server that enables retrieval of transcripts from YouTube videos. This server provides direct access to video transcripts through a simple interface, making it ideal for content analysis and processing.
+A TypeScript Model Context Protocol server that retrieves YouTube transcripts for Claude Desktop, Cursor, Cline, Codex, and other MCP-compatible clients. It is designed for local `npx` usage so transcript requests are made from your own machine instead of a remote proxy.
+
+[![npm version](https://img.shields.io/npm/v/@sinco-lab/mcp-youtube-transcript.svg)](https://www.npmjs.com/package/@sinco-lab/mcp-youtube-transcript)
+[![npm downloads](https://img.shields.io/npm/dm/@sinco-lab/mcp-youtube-transcript.svg)](https://www.npmjs.com/package/@sinco-lab/mcp-youtube-transcript)
+[![GitHub stars](https://img.shields.io/github/stars/sinco-lab/mcp-youtube-transcript?style=social)](https://github.com/sinco-lab/mcp-youtube-transcript)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
 <a href="https://glama.ai/mcp/servers/@sinco-lab/mcp-youtube-transcript">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@sinco-lab/mcp-youtube-transcript/badge" alt="mcp-youtube-transcript" />
@@ -13,19 +18,23 @@ A Model Context Protocol server that enables retrieval of transcripts from YouTu
   - [Installation](#installation)
 - [Usage](#usage)
   - [Basic Configuration](#basic-configuration)
+  - [Docker](#docker)
   - [Testing](#testing)
   - [Troubleshooting and Maintenance](#troubleshooting-and-maintenance)
-- [API Reference](#api-reference)
+- [Tools](#tools)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Features
 
-✨ Key capabilities:
+Key capabilities:
 - Extract transcripts from YouTube videos
 - Support for multiple languages
 - Android InnerTube fallback for current YouTube caption responses
+- Compatible tool names: `get_transcripts` and `get_transcript`
+- Timestamped transcript output with `get_timed_transcript`
+- Video metadata and available transcript languages
 - Format text with continuous or paragraph mode
 - Retrieve video titles and metadata
 - Automatic paragraph segmentation
@@ -102,6 +111,27 @@ To use with Claude Desktop / Cursor / cline, ensure your configuration matches:
 }
 ```
 
+### Docker
+
+The repository includes a production Dockerfile for local container usage:
+
+```bash
+docker build -t mcp-youtube-transcript .
+```
+
+MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "youtube-transcript": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp-youtube-transcript"]
+    }
+  }
+}
+```
+
 ### Testing
 
 #### With Claude App
@@ -159,37 +189,49 @@ rm -rf ~/.npm/_npx
 
 This will remove the cached packages and allow you to start fresh.
 
-## API Reference
+## Tools
 
 ### get_transcripts
 
-Fetches transcripts from YouTube videos.
+Fetches transcript text from a YouTube video.
 
-**Parameters:**
+Parameters:
 - `url` (string, required): YouTube video URL or ID
 - `lang` (string, optional): Language code. If omitted, the best available caption track is used.
-- `enableParagraphs` (boolean, optional): Enable paragraph mode (default: false)
+- `enableParagraphs` (boolean, optional): Enable paragraph mode. Default: `false`.
 
-**Response Format:**
-```json
-{
-  "content": [{
-    "type": "text",
-    "text": "Video title and transcript content",
-    "_meta": {
-      "videoId": "video_id",
-      "title": "video_title",
-      "language": "transcript_language",
-      "source": "innertube",
-      "timestamp": "processing_time",
-      "charCount": "character_count",
-      "transcriptCount": "number_of_transcripts",
-      "totalDuration": "total_duration",
-      "paragraphsEnabled": "paragraph_mode_status"
-    }
-  }]
-}
+### get_transcript
+
+Alias of `get_transcripts` for compatibility with other YouTube transcript MCP servers.
+
+### get_timed_transcript
+
+Fetches transcript text with one timestamped line per caption segment.
+
+Parameters:
+- `url` (string, required): YouTube video URL or ID
+- `lang` (string, optional): Language code. If omitted, the best available caption track is used.
+
+Example output:
+
+```text
+[00:00:01.250] Hello and welcome
+[00:00:03.500] Today we are going to...
 ```
+
+### get_video_info
+
+Fetches basic video metadata and available transcript languages without returning the full transcript.
+
+Parameters:
+- `url` (string, required): YouTube video URL or ID
+
+### get_available_languages
+
+Lists available transcript languages for a YouTube video. Use this before retrying with a specific `lang` value.
+
+Parameters:
+- `url` (string, required): YouTube video URL or ID
 
 ## Development
 
@@ -199,6 +241,9 @@ Fetches transcripts from YouTube videos.
 ├── src/
 │ ├── index.ts            # Server entry point
 │ ├── youtube.ts          # YouTube transcript fetching logic
+├── tests/                # Node test runner coverage
+├── docs/                 # Maintenance notes
+├── Dockerfile            # Local container build
 ├── dist/                 # Compiled output
 └── package.json
 ```

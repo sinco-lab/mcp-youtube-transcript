@@ -13,6 +13,13 @@ export interface TranscriptOptions {
   lang?: string;
 }
 
+export interface CaptionLanguage {
+  languageCode: string;
+  name: string;
+  isGenerated: boolean;
+  source: "innertube" | "web";
+}
+
 interface CaptionTrack {
   languageCode: string;
   baseUrl: string;
@@ -196,6 +203,16 @@ export class YouTubeUtils {
     }
 
     return paragraphs.join("\n\n");
+  }
+
+  static formatTimedTranscriptText(transcripts: Transcript[]): string {
+    return transcripts
+      .map(transcript => {
+        const text = this.normalizeText(this.decodeHTML(transcript.text));
+        return text ? `[${this.formatTime(transcript.timestamp)}] ${text}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
   }
 
   private static parseJson3Transcript(json: string, lang?: string): Transcript[] {
@@ -443,12 +460,47 @@ export class YouTubeTranscriptFetcher {
     }
   }
 
+  private static async fetchCaptionTracks(videoId: string): Promise<{ tracks: CaptionTrack[], source: "innertube" | "web" }> {
+    const fallbackErrors: string[] = [];
+
+    try {
+      const tracks = await this.fetchCaptionTracksViaInnerTube(videoId);
+      if (tracks && tracks.length > 0) {
+        return { tracks, source: "innertube" };
+      }
+    } catch (error) {
+      fallbackErrors.push(`InnerTube: ${(error as Error).message}`);
+    }
+
+    try {
+      const tracks = await this.fetchCaptionTracksViaWeb(videoId);
+      return { tracks, source: "web" };
+    } catch (error) {
+      if (fallbackErrors.length === 0) {
+        throw error;
+      }
+
+      throw new YouTubeTranscriptError(
+        `${(error as Error).message}\nFallback attempts: ${fallbackErrors.join(" | ")}`
+      );
+    }
+  }
+
   /**
    * Fetch caption tracks from Android InnerTube first. The web caption URL can now
    * return HTTP 200 with an empty body, while the Android player response still
    * exposes usable timedtext URLs for many public videos.
    */
   private static async fetchTranscriptConfigViaInnerTube(videoId: string, lang?: string): Promise<TranscriptFetchResult | undefined> {
+    const tracks = await this.fetchCaptionTracksViaInnerTube(videoId);
+    if (!tracks || tracks.length === 0) {
+      return undefined;
+    }
+
+    return this.fetchTranscriptFromTracks(tracks, videoId, lang, "innertube");
+  }
+
+  private static async fetchCaptionTracksViaInnerTube(videoId: string): Promise<CaptionTrack[] | undefined> {
     const response = await this.fetchWithRetry(INNERTUBE_PLAYER_API_URL, {
       method: "POST",
       headers: {
@@ -481,13 +533,18 @@ export class YouTubeTranscriptFetcher {
       return undefined;
     }
 
-    return this.fetchTranscriptFromTracks(tracks, videoId, lang, "innertube");
+    return tracks;
   }
 
   /**
    * Fetch caption tracks from the YouTube watch page as a fallback.
    */
   private static async fetchTranscriptConfigViaWeb(videoId: string, lang?: string): Promise<TranscriptFetchResult> {
+    const tracks = await this.fetchCaptionTracksViaWeb(videoId, lang);
+    return this.fetchTranscriptFromTracks(tracks, videoId, lang, "web");
+  }
+
+  private static async fetchCaptionTracksViaWeb(videoId: string, lang?: string): Promise<CaptionTrack[]> {
     const headers: Record<string, string> = {
       ...ADDITIONAL_HEADERS,
       "User-Agent": USER_AGENT
@@ -526,7 +583,7 @@ export class YouTubeTranscriptFetcher {
       throw new YouTubeTranscriptError(`No transcripts available for video ${videoId}. Response size: ${html.length}`);
     }
 
-    return this.fetchTranscriptFromTracks(tracks, videoId, lang, "web");
+    return tracks;
   }
 
   /**
@@ -651,6 +708,44 @@ export class YouTubeTranscriptFetcher {
 
   private static formatAvailableLanguages(tracks: CaptionTrack[]): string {
     return [...new Set(tracks.map(track => track.languageCode).filter(Boolean))].join(", ");
+  }
+
+  private static getCaptionTrackName(track: CaptionTrack): string {
+    const simpleText = track.name?.simpleText;
+    const runsText = track.name?.runs
+      ?.map(run => run.text || "")
+      .join("")
+      .trim();
+
+    return simpleText || runsText || track.languageCode;
+  }
+
+  private static mapCaptionLanguages(
+    tracks: CaptionTrack[],
+    source: "innertube" | "web"
+  ): CaptionLanguage[] {
+    const languages = new Map<string, CaptionLanguage>();
+
+    for (const track of tracks) {
+      const languageCode = track.languageCode;
+      if (!languageCode) {
+        continue;
+      }
+
+      const item = {
+        languageCode,
+        name: this.getCaptionTrackName(track),
+        isGenerated: track.kind === "asr",
+        source
+      };
+      const existing = languages.get(languageCode);
+
+      if (!existing || (existing.isGenerated && !item.isGenerated)) {
+        languages.set(languageCode, item);
+      }
+    }
+
+    return [...languages.values()].sort((a, b) => a.languageCode.localeCompare(b.languageCode));
   }
 
   private static extractCaptionTracksFromHtml(html: string): CaptionTrack[] | undefined {
@@ -840,6 +935,52 @@ export class YouTubeTranscriptFetcher {
         throw error;
       }
       throw new YouTubeTranscriptError(`Failed to fetch transcripts: ${(error as Error).message}`);
+    }
+  }
+
+  static async fetchAvailableLanguages(videoId: string): Promise<{ videoId: string, languages: CaptionLanguage[], source: string }> {
+    try {
+      const identifier = this.extractVideoId(videoId);
+      const { tracks, source } = await this.fetchCaptionTracks(identifier);
+
+      return {
+        videoId: identifier,
+        languages: this.mapCaptionLanguages(tracks, source),
+        source
+      };
+    } catch (error) {
+      if (error instanceof YouTubeTranscriptError || error instanceof McpError) {
+        throw error;
+      }
+      throw new YouTubeTranscriptError(`Failed to fetch available languages: ${(error as Error).message}`);
+    }
+  }
+
+  static async fetchVideoInfo(videoId: string): Promise<{
+    videoId: string;
+    title: string;
+    availableLanguages: CaptionLanguage[];
+    source?: string;
+    transcriptWarning?: string;
+  }> {
+    const identifier = this.extractVideoId(videoId);
+    const title = await this.fetchVideoTitle(identifier);
+
+    try {
+      const { languages, source } = await this.fetchAvailableLanguages(identifier);
+      return {
+        videoId: identifier,
+        title,
+        availableLanguages: languages,
+        source
+      };
+    } catch (error) {
+      return {
+        videoId: identifier,
+        title,
+        availableLanguages: [],
+        transcriptWarning: (error as Error).message
+      };
     }
   }
 }

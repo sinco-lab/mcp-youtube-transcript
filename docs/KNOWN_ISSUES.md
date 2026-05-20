@@ -1,5 +1,29 @@
 # Known Issues
 
+## YouTube Transcript Endpoint Changes
+
+### Issue Description
+
+YouTube's web caption track URLs may return HTTP 200 with an empty response body even when caption tracks are listed on the video page. Users usually see this as:
+
+```text
+MCP error -32603: No transcripts found
+```
+
+or a rate-limit style error in hosted/remote environments.
+
+### Current Status
+
+- Issue Status: Mitigated
+- Solution: Prefer Android InnerTube caption tracks and parse modern `srv3` caption XML, with web caption tracks retained as a fallback.
+- Remaining Risk: YouTube transcript access is still based on private/internal endpoints, so YouTube may continue to change client enforcement, regional behavior, or anti-abuse checks.
+
+### Notes
+
+- Local `npx` usage sends transcript requests from the user's machine.
+- Remote MCP providers send transcript requests from the provider's infrastructure, so rate limiting and regional blocking can differ from local runs.
+- If YouTube returns an empty caption body for all available formats, the server now reports the empty-response condition and available languages instead of only saying `No transcripts found`.
+
 ## Node.js Version Management with Claude App
 
 ### Issue Description
@@ -82,4 +106,4 @@ When using nvm (Node Version Manager) with multiple Node.js versions installed, 
 - Document this approach for future reference
 - While minimal PATH might work (e.g., just /bin for sh), full system paths are recommended for better compatibility
 
-We will keep this document updated if we discover any additional insights or improvements. 
+We will keep this document updated if we discover any additional insights or improvements.

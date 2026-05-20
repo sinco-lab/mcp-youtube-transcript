@@ -6,6 +6,18 @@ import { McpError } from "@modelcontextprotocol/sdk/types.js";
 import { YouTubeTranscriptFetcher, YouTubeUtils, YouTubeTranscriptError, TranscriptOptions, Transcript } from './youtube.js';
 import { z } from "zod";
 
+type GetTranscriptsInput = {
+  url: string;
+  lang?: string;
+  enableParagraphs?: boolean;
+};
+
+const getTranscriptsInputSchema: any = z.object({
+  url: z.string().describe("YouTube video URL or ID"),
+  lang: z.string().optional().describe("Optional language code for transcripts (e.g. 'en', 'uk', 'ja', 'ru', 'zh')"),
+  enableParagraphs: z.boolean().default(false).describe("Enable automatic paragraph breaks, default `false`")
+});
+
 class YouTubeTranscriptExtractor {
   /**
    * Extracts YouTube video ID from various URL formats or direct ID input
@@ -17,7 +29,7 @@ class YouTubeTranscriptExtractor {
   /**
    * Retrieves transcripts for a given video ID and language
    */
-  async getTranscripts({ videoID, lang }: TranscriptOptions): Promise<{ transcripts: Transcript[], title: string }> {
+  async getTranscripts({ videoID, lang }: TranscriptOptions): Promise<{ transcripts: Transcript[], title: string, language: string, source: string }> {
     try {
       const result = await YouTubeTranscriptFetcher.fetchTranscripts(videoID, { lang });
       if (result.transcripts.length === 0) {
@@ -41,7 +53,7 @@ class TranscriptServer {
     this.extractor = new YouTubeTranscriptExtractor();
     this.server = new McpServer({
       name: "mcp-youtube-transcript",
-      version: "0.0.1",
+      version: "0.0.8",
       description: "A server built on the Model Context Protocol (MCP) that enables direct downloading of YouTube video transcripts, supporting AI and video analysis workflows."
     });
 
@@ -57,44 +69,44 @@ class TranscriptServer {
   }
 
   private setupTools(): void {
-    this.server.tool(
+    this.server.registerTool(
       "get_transcripts",
-      `Extract and process transcripts from a YouTube video.\n\n**Parameters:**\n- \`url\` (string, required): YouTube video URL or ID.\n- \`lang\` (string, optional, default 'en'): Language code for transcripts (e.g. 'en', 'uk', 'ja', 'ru', 'zh').\n- \`enableParagraphs\` (boolean, optional, default false): Enable automatic paragraph breaks.\n\n**IMPORTANT:** If the user does *not* specify a language *code*, **DO NOT** include the \`lang\` parameter in the tool call. Do not guess the language or use parts of the user query as the language code.`,
       {
-        url: z.string().describe("YouTube video URL or ID"),
-        lang: z.string().default("en").describe("Language code for transcripts, default 'en' (e.g. 'en', 'uk', 'ja', 'ru', 'zh')"),
-        enableParagraphs: z.boolean().default(false).describe("Enable automatic paragraph breaks, default `false`")
+        description: `Extract and process transcripts from a YouTube video.\n\n**Parameters:**\n- \`url\` (string, required): YouTube video URL or ID.\n- \`lang\` (string, optional): Language code for transcripts (e.g. 'en', 'uk', 'ja', 'ru', 'zh'). If omitted, the best available caption track is used.\n- \`enableParagraphs\` (boolean, optional, default false): Enable automatic paragraph breaks.\n\n**IMPORTANT:** If the user does *not* specify a language *code*, **DO NOT** include the \`lang\` parameter in the tool call. Do not guess the language or use parts of the user query as the language code.`,
+        inputSchema: getTranscriptsInputSchema
       },
-      async (input) => {
+      async (input: unknown) => {
+        const params = input as GetTranscriptsInput;
         try {
-          const videoId = this.extractor.extractYoutubeId(input.url);
+          const videoId = this.extractor.extractYoutubeId(params.url);
           console.error(`Processing transcripts for video: ${videoId}`);
           
-          const { transcripts, title } = await this.extractor.getTranscripts({ 
-            videoID: videoId, 
-            lang: input.lang 
+          const { transcripts, title, language, source } = await this.extractor.getTranscripts({
+            videoID: videoId,
+            lang: params.lang
           });
           
           // Format text with optional paragraph breaks
           const formattedText = YouTubeUtils.formatTranscriptText(transcripts, {
-            enableParagraphs: input.enableParagraphs
+            enableParagraphs: params.enableParagraphs
           });
             
-          console.error(`Successfully extracted transcripts for "${title}" (${formattedText.length} chars)`);
+          console.error(`Successfully extracted ${language} transcripts via ${source} for "${title}" (${formattedText.length} chars)`);
           
           return {
             content: [{
-              type: "text",
+              type: "text" as const,
               text: `# ${title}\n\n${formattedText}`,
-              metadata: {
+              _meta: {
                 videoId,
                 title,
-                language: input.lang,
+                language,
+                source,
                 timestamp: new Date().toISOString(),
                 charCount: formattedText.length,
                 transcriptCount: transcripts.length,
                 totalDuration: YouTubeUtils.calculateTotalDuration(transcripts),
-                paragraphsEnabled: input.enableParagraphs
+                paragraphsEnabled: params.enableParagraphs ?? false
               }
             }]
           };

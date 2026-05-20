@@ -8,7 +8,6 @@ tests/
 tsconfig.json
 .dockerignore
 Dockerfile
-smithery.yaml
 
 # Development files
 .git/
@@ -28,4 +27,4 @@ coverage/
 
 # Environment
 .env
-.env.* 
+.env.*

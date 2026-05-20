@@ -1,7 +1,5 @@
 # MCP YouTube Transcript Server
 
-[![smithery badge](https://smithery.ai/badge/@sinco-lab/mcp-youtube-transcript)](https://smithery.ai/server/@sinco-lab/mcp-youtube-transcript)
-
 A Model Context Protocol server that enables retrieval of transcripts from YouTube videos. This server provides direct access to video transcripts through a simple interface, making it ideal for content analysis and processing.
 
 <a href="https://glama.ai/mcp/servers/@sinco-lab/mcp-youtube-transcript">
@@ -27,6 +25,7 @@ A Model Context Protocol server that enables retrieval of transcripts from YouTu
 ✨ Key capabilities:
 - Extract transcripts from YouTube videos
 - Support for multiple languages
+- Android InnerTube fallback for current YouTube caption responses
 - Format text with continuous or paragraph mode
 - Retrieve video titles and metadata
 - Automatic paragraph segmentation
@@ -42,9 +41,7 @@ A Model Context Protocol server that enables retrieval of transcripts from YouTu
 
 ### Installation
 
-We provide two installation methods:
-
-#### Option 1: Manual Configuration (Recommended for Production)
+Use a local `npx` configuration so transcript requests are sent from your own machine instead of a remote MCP proxy.
 
 1. Create or edit the Claude Desktop configuration file:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -87,14 +84,6 @@ cat > ~/Library/Application\ Support/Claude/claude_desktop_config.json << 'EOL'
 }
 EOL
 ```
-
-#### Option 2: Via Smithery (Development Only)
-
-```bash
-npx -y @smithery/cli install @sinco-lab/mcp-youtube-transcript --client claude
-```
-
-⚠️ **Note**: This method is not recommended for production use as it relies on Smithery's proxy services.
 
 ## Usage
 
@@ -142,7 +131,7 @@ npx @modelcontextprotocol/inspector node "dist/index.js"
 # 1. List Tools: clink `List Tools`
 # 2. Test get_transcripts with:
 #    url: "https://www.youtube.com/watch?v=AJpK3YTTKZ4"
-#    lang: "en" (optional)
+#    lang: "en" (optional; omit to use the best available caption track)
 #    enableParagraphs: false (optional)
 ```
 
@@ -178,7 +167,7 @@ Fetches transcripts from YouTube videos.
 
 **Parameters:**
 - `url` (string, required): YouTube video URL or ID
-- `lang` (string, optional): Language code (default: "en")
+- `lang` (string, optional): Language code. If omitted, the best available caption track is used.
 - `enableParagraphs` (boolean, optional): Enable paragraph mode (default: false)
 
 **Response Format:**
@@ -187,10 +176,11 @@ Fetches transcripts from YouTube videos.
   "content": [{
     "type": "text",
     "text": "Video title and transcript content",
-    "metadata": {
+    "_meta": {
       "videoId": "video_id",
       "title": "video_title",
       "language": "transcript_language",
+      "source": "innertube",
       "timestamp": "processing_time",
       "charCount": "character_count",
       "transcriptCount": "number_of_transcripts",
@@ -226,12 +216,18 @@ Fetches transcripts from YouTube videos.
   - Language availability
   - Network errors
   - Rate limiting
+  - Empty caption responses caused by YouTube client enforcement
 
 - **Text Processing:**
   - HTML entity decoding
   - Punctuation normalization
   - Space normalization
+  - `srv3`, classic XML, `json3`, and VTT caption parsing
   - Smart paragraph detection
+
+### YouTube Access Notes
+
+YouTube does not provide an official public API for downloading captions from arbitrary videos. This server uses YouTube's internal caption data exposed to web and Android clients. YouTube may still reject requests from some networks, hosted environments, or remote MCP providers. When that happens, the server now returns a more specific diagnostic instead of a generic `No transcripts found` error.
 
 ## Contributing
 

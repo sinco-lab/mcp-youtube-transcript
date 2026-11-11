@@ -52,6 +52,16 @@ Key capabilities:
 
 Use a local `npx` configuration so transcript requests are sent from your own machine instead of a remote MCP proxy.
 
+**Quick setup with Agent Add**
+
+```bash
+npx -y agent-add --global --mcp '{"youtube-transcript":{"command":"npx","args":["-y","@sinco-lab/mcp-youtube-transcript"]}}'
+```
+
+Choose your client in [Agent Add](https://github.com/pea3nut/agent-add), then restart it.
+
+**Manual Claude Desktop setup**
+
 1. Create or edit the Claude Desktop configuration file:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
